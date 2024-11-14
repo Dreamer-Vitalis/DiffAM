@@ -1,13 +1,11 @@
 import numpy as np
 import torch
 
-
 def get_beta_schedule(*, beta_start, beta_end, num_diffusion_timesteps):
     betas = np.linspace(beta_start, beta_end,
                         num_diffusion_timesteps, dtype=np.float64)
     assert betas.shape == (num_diffusion_timesteps,)
     return betas
-
 
 def extract(a, t, x_shape):
     """Extract coefficients from a based on t and reshape to make it
@@ -19,7 +17,6 @@ def extract(a, t, x_shape):
     out = out.reshape((bs,) + (1,) * (len(x_shape) - 1))
     return out
 
-
 def denoising_step(xt, t, t_next, *,
                    models,
                    logvars,
@@ -30,6 +27,10 @@ def denoising_step(xt, t, t_next, *,
                    ratio=1.0,
                    out_x0_t=False,
                    ):
+
+    # 使用 DataParallel 将模型分布到多个 GPU 上
+    if torch.cuda.device_count() > 1:
+        models = torch.nn.DataParallel(models)
 
     # Compute noise and variance
     if type(models) != list:
@@ -96,5 +97,3 @@ def denoising_step(xt, t, t_next, *,
         return xt_next, x0_t
     else:
         return xt_next
-
-
