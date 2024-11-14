@@ -61,11 +61,16 @@ class DiffAM_MR(object):
         url = "https://image-editing-test-12345.s3-us-west-2.amazonaws.com/checkpoints/celeba_hq.ckpt"
 
         model = i_DDPM()
+        # if self.args.model_path:
+        #     init_ckpt = torch.load(self.args.model_path)
+        # else:
+        #     init_ckpt = torch.hub.load_state_dict_from_url(
+        #         url, map_location=self.device)
         if self.args.model_path:
-            init_ckpt = torch.load(self.args.model_path)
+            init_ckpt = torch.load(self.args.model_path, map_location='CPU')
         else:
             init_ckpt = torch.hub.load_state_dict_from_url(
-                url, map_location=self.device)
+                url, map_location='CPU')
         learn_sigma = True
         print("Original diffusion Model loaded.")
         model.load_state_dict(init_ckpt)
