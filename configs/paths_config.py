@@ -1,5 +1,5 @@
 DATASET_PATHS = {
-	'CelebA_HQ': './assets/datasets/CelebAMask-HQ/',
+	'CelebA_HQ': '/kaggle/input/celebamaskhq/CelebAMask-HQ/',
     'MT': './assets/datasets/MT-dataset/'
 }
 
