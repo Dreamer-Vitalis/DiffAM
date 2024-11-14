@@ -18,7 +18,7 @@ def get_dataloader(train_dataset, test_dataset, bs_train=1, num_workers=0):
         shuffle=True,
         sampler=None,
         num_workers=num_workers,
-        pin_memory=True,
+        pin_memory=False,
     )
     test_loader = DataLoader(
         test_dataset,
@@ -27,7 +27,7 @@ def get_dataloader(train_dataset, test_dataset, bs_train=1, num_workers=0):
         sampler=None,
         shuffle=True,
         num_workers=num_workers,
-        pin_memory=True,
+        pin_memory=False,
     )
 
     return {'train': train_loader, 'test': test_loader}
