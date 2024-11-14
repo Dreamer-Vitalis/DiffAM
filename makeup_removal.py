@@ -18,6 +18,7 @@ from datasets.data_utils import get_dataset, get_dataloader
 from configs.paths_config import DATASET_PATHS, MODEL_PATHS
 from utils.align_utils import run_alignment
 
+import torch.cuda.amp as amp  # Import AMP
 
 class DiffAM_MR(object):
     def __init__(self, args, config, device=None):
@@ -70,6 +71,9 @@ class DiffAM_MR(object):
         model.load_state_dict(init_ckpt)
         model.to(self.device)
         model = torch.nn.DataParallel(model)
+
+        # Initialize AMP scaler
+        scaler = amp.GradScaler()
 
         # ----------- Optimizer and Scheduler -----------#
         print(f"Setting optimizer with lr={self.args.lr_clip_finetune}")
@@ -223,12 +227,13 @@ class DiffAM_MR(object):
                                 t = (torch.ones(n) * i).to(self.device)
                                 t_next = (torch.ones(n) * j).to(self.device)
 
-                                x = denoising_step(x, t=t, t_next=t_next, models=model,
-                                                   logvars=self.logvar,
-                                                   sampling_type=self.args.sample_type,
-                                                   b=self.betas,
-                                                   eta=self.args.eta,
-                                                   learn_sigma=learn_sigma)
+                                with amp.autocast():  # Enable AMP
+                                    x = denoising_step(x, t=t, t_next=t_next, models=model,
+                                                       logvars=self.logvar,
+                                                       sampling_type=self.args.sample_type,
+                                                       b=self.betas,
+                                                       eta=self.args.eta,
+                                                       learn_sigma=learn_sigma)
 
                                 progress_bar.update(1)
                         tvu.save_image(
@@ -236,17 +241,22 @@ class DiffAM_MR(object):
                         tvu.save_image(
                             (x+1)/2, './sample_fake/sample_{}.png'.format(step))
 
-                        loss_clip = (2 - clip_loss_func(x0, None,
-                                     x, None, self.src_txt, self.trg_txt)) / 2
-                        loss_clip = -torch.log(loss_clip)
-                        loss_id = torch.mean(id_loss_func(x0, x))
-                        loss_l1 = nn.L1Loss()(x0, x)
-                        loss_lpips = loss_fn_alex(x0, x)
-                        loss = self.args.MR_clip_loss_w * loss_clip + self.args.MR_id_loss_w * loss_id + \
-                            self.args.MR_l1_loss_w * loss_l1 + self.args.MR_lpips_loss_w * loss_lpips
-                        loss.backward()
+                        with amp.autocast():  # Enable AMP
+                            loss_clip = (2 - clip_loss_func(x0, None,
+                                         x, None, self.src_txt, self.trg_txt)) / 2
+                            loss_clip = -torch.log(loss_clip)
+                            loss_id = torch.mean(id_loss_func(x0, x))
+                            loss_l1 = nn.L1Loss()(x0, x)
+                            loss_lpips = loss_fn_alex(x0, x)
+                            loss = self.args.MR_clip_loss_w * loss_clip + self.args.MR_id_loss_w * loss_id + \
+                                self.args.MR_l1_loss_w * loss_l1 + self.args.MR_lpips_loss_w * loss_lpips
 
-                        optim_ft.step()
+                        scaler.scale(loss).backward()  # AMP backward
+                        scaler.step(optim_ft)  # AMP step
+                        scaler.update()  # AMP update
+
+                        torch.cuda.empty_cache()  # Clear GPU memory
+
                         print(
                             f"CLIP {step}-{it_out}: loss_id: {loss_id:.3f}, loss_clip: {loss_clip:.3f}")
 
